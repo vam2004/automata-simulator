@@ -10,7 +10,7 @@ The input is provided by the stdin. Options:
     --test    prints wheter the automata recognizes the input 
 """
 
-sintax = """
+syntax = """
 EPSILON TRANSITION SYMBOL:
     The following symbols are considered epsilon transition symbol:
         (utf8): "ε" - Greek Capital Letter Epsilon (U+0395)
@@ -56,10 +56,12 @@ def main():
         return print(usage[1:-1])
     operation = args[0]
     filename = args[1]
-    
+    print(operation)
     match(operation):
         case "--help" | "-h":
             print(usage)
+        case "--syntax" | "syntax":
+            print(syntax)
         case "--show" | "-s" | "show":
             Automata().open(filename).run().show()
         case "--test" | "-t" | "test":
@@ -96,13 +98,31 @@ class InvalidScapeSequence(InvalidSyntax):
         message ="Invalid Scape Sequence"
         InvalidSyntax.__init__(self, message)
 
-def get_hex_of(buffer, init, end):
-    if end > len(buffer):
-        raise UnclosedHex()
-    try:
-        return int(buffer[init:end], 16)
-    except ValueError:
+def hexvalue(src):
+    src = ord(src)
+    if src < 48:
         raise InvalidHex()
+    if src < 58:
+        return src - 48
+    if src < 65:
+        raise InvalidHex()
+    if src < 71:
+        return src - 55
+    if src < 97:
+        raise InvalidHex()
+    if src < 103:
+        return src - 87
+    raise InvalidHex()
+def get_hexbyte(buffer, idx):
+    if idx >= len(buffer):
+        raise UnclosedHex()
+    h0 = hexvalue(buffer[idx])
+    h1 = hexvalue(buffer[idx + 1])
+    return h1 + (h0 << 4)
+def get_hexword(buffer, idx):
+    b0 = get_hexbyte(buffer, idx)
+    b1 = get_hexbyte(buffer, idx + 2)
+    return b0 + (b1 << 8)
 class bytesstack:
     def __init__(self, size):
         self.buffer = bytearray(size)
@@ -111,7 +131,6 @@ class bytesstack:
     def append(self, value):
         if value == 0:
             self.append_byte(0)
-        print(value)
         while value != 0:
             self.append_byte(value & 0xff)
             value = value >> 8
@@ -129,6 +148,8 @@ class SymbolCell:
     def __init__(self, buffer):
         self.buffer = buffer
         self.pos = 0
+    def __iter__(self):
+        return self
     def __next__(self):
         scape = False
         base = self.pos
@@ -146,11 +167,11 @@ class SymbolCell:
                     case ':':
                         buffer.append(ord(':'))
                     case 'x':
-                        buffer.append(get_hex_of(self.buffer, index + 1, index + 3))
-                        index = index + 2
+                        buffer.append(get_hexbyte(self.buffer, index + 1))
+                        index += 2
                     case 'w':
-                        buffer.append(get_hex_of(self.buffer, index + 1, index + 5))
-                        index = index + 4
+                        buffer.append(get_hexword(self.buffer, index + 1))
+                        index += 4
                     case _:
                         raise InvalidScapeSequence()
                 scape = False
@@ -160,7 +181,7 @@ class SymbolCell:
                 case ':':
                     if index == base:
                         raise EmptySymbol() 
-                    index = index + 1
+                    index += 1
                     break
                 case '\\':
                     scape = True
@@ -169,11 +190,32 @@ class SymbolCell:
             index += 1
         self.pos = index
         return buffer.unwrap()
+def first_symbol_cell(cell):
+        factory = SymbolCell(cell)
+        first_symbol = next(factory, None)
+        empty_transition = False
+        header = []
+        if first_symbol == b'\xb5\x03' or first_symbol == b'epsilon':
+            empty_transition = True
+        else:
+            header.append(bytes(first_symbol))
+        insert_symbol_array(header, factory)
+        return header, empty_transition
+def insert_symbol_array(header, factory):
+    for value in factory:
+        if value == None:
+            break
+        header.append(bytes(value))
+def get_symbol_array(cell):
+    header = []
+    insert_symbol_array(header, SymbolCell(cell))
+    return header
 class Automata:
     def __init__(self):
         self.symbols = None
         self.table = None
         self.error = None
+        self.empty_transition = None
     def open(self, filename, dialect='excel', **fmtparams):
         file = None
         try:
@@ -186,15 +228,18 @@ class Automata:
         with file as source:
             return self.parse(csv.reader(source, dialect, **fmtparams))
     def parse(reader):
-        header = next(reader, None)
-        if header == None or len(header) == 0:
+        raw_header = next(reader, None)
+        if raw_header == None or len(raw_header) == 0:
             self.error = EmptyHeader()
             return self
-        first_symbol = next(SymbolCell(header[1]), None)
-        if first_symbol == None:
-            self.error = EmptySymbol()
+        header = []
+        try:
+            header.append(first_symbol_cell(raw_header[1]))
+        except InvalidSyntax as error:
+            self.error = error
             return self
-        # todo
+        for cell in raw_header[1:]:
+            header.append(get_symbol_array(cell))
     def unwrap(self):
         if self.error != None:
             raise self.error
