@@ -53,22 +53,35 @@ import sys
 import csv
 def main():
     args = sys.argv[1:]
-    if(len(args) < 2):
-        return print(usage[1:-1])
+    if len(args) < 1:
+        print(usage[1:-1])
+        return None
     operation = args[0]
+    if len(args) < 2:
+        match(operation):
+            case "--help" | "-h":
+                print(usage)
+            case "--syntax" | "syntax":
+                print(syntax)
+            case _:
+                print("Unknown Operation. See --help for more details")
+        return None
+    
     filename = args[1]
-    symbol_sep = ','
+    symbol_sep = ':'
     match(operation):
-        case "--help" | "-h":
-            print(usage)
-        case "--syntax" | "syntax":
-            print(syntax)
         case "--show" | "-s" | "show":
             Automata().open(filename, symbol_sep).run().show()
         case "--test" | "-t" | "test":
             Automata().open(filename, symbol_sep).run().show_is_final()
+        case "--parse" | "-p" | "parse":
+            tmp = Automata().open(filename, symbol_sep)
+            if tmp.has_error():
+                tmp.print_error()
+        case "--error" | "-e" | "error":
+            Automata().open(filename, symbol_sep).unwrap()
         case _:
-            print("Invalid Operation. See --help for more details")
+            print("Unknown Operation. See --help for more details")
 
 class InvalidSyntax(Exception):
     def __init__(self, foward):
