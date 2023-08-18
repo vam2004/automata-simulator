@@ -50,13 +50,13 @@ EMPTY TRANSITION:
     If there is one empty transition, all subsequentes epsilon symbols are considered as literal symbols
 """
 import sys
+import csv
 def main():
     args = sys.argv[1:]
     if(len(args) < 2):
         return print(usage[1:-1])
     operation = args[0]
     filename = args[1]
-    print(operation)
     match(operation):
         case "--help" | "-h":
             print(usage)
@@ -210,41 +210,55 @@ def get_symbol_array(cell):
     header = []
     insert_symbol_array(header, SymbolCell(cell))
     return header
+def store_symbols(header, parsed, associated):
+    for value in parsed:
+        header[value] = associated
+def parse_header(reader):
+    raw_header = next(reader, None)
+    if raw_header == None or len(raw_header) == 0:
+        raise EmptyHeader()
+    header = {}
+    first_symbols, has_empty = first_symbol_cell(raw_header[1])
+    store_symbols(header, first_symbols, 0)
+    for index in range(2, len(raw_header)):
+        cell = raw_header[index]
+        store_symbols(header, get_symbol_array(cell), index - 1)
+    return header, has_empty
 class Automata:
     def __init__(self):
         self.symbols = None
         self.table = None
         self.error = None
-        self.empty_transition = None
-    def open(self, filename, dialect='excel', **fmtparams):
+        self.has_empty = None
+    def open(self, filename, dialect="excel-tab", **fmtparams):
         file = None
         try:
-           file = open(filename)
+           file = open(filename, newline="")
         except OSError as error:
             self.error = InvalidFilename()
             return self
         return self.use(file, dialect, **fmtparams)
-    def use(file, dialect="excel", **fmtparams):
+    def use(self, file, dialect="excel-tab", **fmtparams):
         with file as source:
             return self.parse(csv.reader(source, dialect, **fmtparams))
-    def parse(reader):
-        raw_header = next(reader, None)
-        if raw_header == None or len(raw_header) == 0:
-            self.error = EmptyHeader()
-            return self
-        header = []
+        return self
+    def parse(self, reader):
         try:
-            header.append(first_symbol_cell(raw_header[1]))
+            header, has_empty = parse_header(reader)
+            print(header)
+            return self
         except InvalidSyntax as error:
             self.error = error
             return self
-        for cell in raw_header[1:]:
-            header.append(get_symbol_array(cell))
     def unwrap(self):
         if self.error != None:
             raise self.error
         else:
             return self
+    def get_trasition(self, state, symbol):
+        transition_id = self.symbols[symbol]
+        tmp = self.table[state]
+        return tmp.get(transition_id)
     def clear_error(self):
         self.error = None
         return self
