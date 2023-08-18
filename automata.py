@@ -54,45 +54,48 @@ def main():
     args = sys.argv[1:]
     if(len(args) < 2):
         return print(usage[1:-1])
-    filename = args[0]
-    operation = args[1]
+    operation = args[0]
+    filename = args[1]
+    
     match(operation):
         case "--help" | "-h":
             print(usage)
         case "--show" | "-s" | "show":
             Automata().open(filename).run().show()
         case "--test" | "-t" | "test":
-            if Automata().open(filename).run().is_final():
-                print("true")
-            else:
-                print("false")
+            Automata().open(filename).run().show_is_final()
         case _:
             print("Invalid Operation. See --help for more details")
 
-class InvalidFilename(Exception):
+class InvalidSyntax(Exception):
+    def __init__(self, foward):
+        Exception.__init__(self, foward)
+        self.foward = foward
+class InvalidFilename(InvalidSyntax):
     def __init__(self):
         message ="Invalid Filename. See --help for more details"
-        Exception.__init__(self, message)
-class EmptyHeader(Exception):
+        InvalidSyntax.__init__(self, message)
+class EmptyHeader(InvalidSyntax):
     def __init__(self):
         message ="Empty Header. See --syntax for more details"
-        Exception.__init__(self, message)
-class EmptySymbol(Exception):
+        InvalidSyntax.__init__(self, message)
+class EmptySymbol(InvalidSyntax):
     def __init__(self):
         message ="Empty Symbol. See --syntax for more details"
-        Exception.__init__(self, message)
-class InvalidHex(Exception):
+        InvalidSyntax.__init__(self, message)
+class InvalidHex(InvalidSyntax):
     def __init__(self):
         message ="Invalid Hexdecimal Digit"
-        Exception.__init__(self, message)
-class UnclosedHex(Exception):
+        InvalidSyntax.__init__(self, message)
+class UnclosedHex(InvalidSyntax):
     def __init__(self):
         message ="Unclosed Hexdecimal Substring"
-        Exception.__init__(self, message)
-class InvalidScapeSequence(Exception):
+        InvalidSyntax.__init__(self, message)
+class InvalidScapeSequence(InvalidSyntax):
     def __init__(self):
         message ="Invalid Scape Sequence"
-        Exception.__init__(self, message)
+        InvalidSyntax.__init__(self, message)
+
 def get_hex_of(buffer, init, end):
     if end > len(buffer):
         raise UnclosedHex()
@@ -191,6 +194,7 @@ class Automata:
         if first_symbol == None:
             self.error = EmptySymbol()
             return self
+        # todo
     def unwrap(self):
         if self.error != None:
             raise self.error
@@ -199,5 +203,32 @@ class Automata:
     def clear_error(self):
         self.error = None
         return self
+    def step(self):
+        pass
+    def run(self):
+        # todo
+        return self
+    def print_error(self):
+        print("ERROR: %s" % (self.error.foward,))
+    def has_error(self):
+        return self.error != None
+    def show(self):
+        if self.has_error():
+            self.print_error()
+        else:
+            # todo
+            pass
+            
+    def is_final(self):
+        # todo
+        pass
+    def show_is_final(self):
+        if self.has_error():
+            self.print_error()
+        return None
+        #elif self.is_final()
+            #print("true")
+        #else:
+            #print("false")
 if __name__ == "__main__":
     main()
