@@ -57,15 +57,16 @@ def main():
         return print(usage[1:-1])
     operation = args[0]
     filename = args[1]
+    symbol_sep = ','
     match(operation):
         case "--help" | "-h":
             print(usage)
         case "--syntax" | "syntax":
             print(syntax)
         case "--show" | "-s" | "show":
-            Automata().open(filename).run().show()
+            Automata().open(filename, symbol_sep).run().show()
         case "--test" | "-t" | "test":
-            Automata().open(filename).run().show_is_final()
+            Automata().open(filename, symbol_sep).run().show_is_final()
         case _:
             print("Invalid Operation. See --help for more details")
 
@@ -145,9 +146,10 @@ class bytesstack:
             return self.buffer[:self.ptr]
         return bytearray()
 class SymbolCell:
-    def __init__(self, buffer):
+    def __init__(self, buffer, symbol_sep=':'):
         self.buffer = buffer
         self.pos = 0
+        self.symbol_sep = symbol_sep
     def __iter__(self):
         return self
     def __next__(self):
@@ -164,8 +166,8 @@ class SymbolCell:
                 match(value):
                     case '\\':
                         buffer.append(ord('\\'))
-                    case ':':
-                        buffer.append(ord(':'))
+                    case self.symbol_sep:
+                        buffer.append(ord(self.symbol_sep))
                     case 'x':
                         buffer.append(get_hexbyte(self.buffer, index + 1))
                         index += 2
@@ -178,7 +180,7 @@ class SymbolCell:
                 index += 1
                 continue
             match(value):
-                case ':':
+                case self.symbol_sep:
                     if index == base:
                         raise EmptySymbol() 
                     index += 1
@@ -190,8 +192,8 @@ class SymbolCell:
             index += 1
         self.pos = index
         return buffer.unwrap()
-def first_symbol_cell(cell):
-        factory = SymbolCell(cell)
+def first_symbol_cell(cell, symbol_sep=':'):
+        factory = SymbolCell(cell, symbol_sep)
         first_symbol = next(factory, None)
         empty_transition = False
         header = []
@@ -206,23 +208,23 @@ def insert_symbol_array(header, factory):
         if value == None:
             break
         header.append(bytes(value))
-def get_symbol_array(cell):
+def get_symbol_array(cell, symbol_sep=':'):
     header = []
-    insert_symbol_array(header, SymbolCell(cell))
+    insert_symbol_array(header, SymbolCell(cell, symbol_sep))
     return header
 def store_symbols(header, parsed, associated):
     for value in parsed:
         header[value] = associated
-def parse_header(reader):
+def parse_header(reader, symbol_sep=':'):
     raw_header = next(reader, None)
     if raw_header == None or len(raw_header) == 0:
         raise EmptyHeader()
     header = {}
-    first_symbols, has_empty = first_symbol_cell(raw_header[1])
+    first_symbols, has_empty = first_symbol_cell(raw_header[1], symbol_sep)
     store_symbols(header, first_symbols, 0)
     for index in range(2, len(raw_header)):
         cell = raw_header[index]
-        store_symbols(header, get_symbol_array(cell), index - 1)
+        store_symbols(header, get_symbol_array(cell, symbol_sep), index - 1)
     return header, has_empty
 class Automata:
     def __init__(self):
@@ -230,21 +232,21 @@ class Automata:
         self.table = None
         self.error = None
         self.has_empty = None
-    def open(self, filename, dialect="excel-tab", **fmtparams):
+    def open(self, filename, symbol_sep=':', dialect="excel-tab", **fmtparams):
         file = None
         try:
            file = open(filename, newline="")
         except OSError as error:
             self.error = InvalidFilename()
             return self
-        return self.use(file, dialect, **fmtparams)
-    def use(self, file, dialect="excel-tab", **fmtparams):
+        return self.use(file, symbol_sep, dialect, **fmtparams)
+    def use(self, file, symbol_sep=':', dialect="excel-tab",**fmtparams):
         with file as source:
-            return self.parse(csv.reader(source, dialect, **fmtparams))
+            return self.parse(csv.reader(source, dialect, **fmtparams), symbol_sep)
         return self
-    def parse(self, reader):
+    def parse(self, reader, symbol_sep=':'):
         try:
-            header, has_empty = parse_header(reader)
+            header, has_empty = parse_header(reader, symbol_sep)
             print(header)
             return self
         except InvalidSyntax as error:
